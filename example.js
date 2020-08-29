@@ -2,6 +2,7 @@ const fs = require('fs');
 const puppeteer = require('puppeteer');
 
 function extractItems() {
+    console.log('if early vall');
     const extractedElements = document.querySelectorAll('#boxes > div.box');
     const items = [];
     for (let element of extractedElements) {
@@ -20,6 +21,7 @@ async function scrapeInfiniteScrollItems(
     try {
         let previousHeight;
         while (items.length < itemTargetCount) {
+            console.log('should be befoer this point');
             items = await page.evaluate(extractItems);
             previousHeight = await page.evaluate('document.body.scrollHeight');
             await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
