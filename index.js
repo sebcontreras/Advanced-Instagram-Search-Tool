@@ -68,48 +68,50 @@ function extractItem(identifier) {
 }
 
 //before we do this lets add data of all posts
-function appendLinks(arguments) {
+function appendData(arguments) {
     /**
      * these statements parse the serealizabale argument that was passed into useable data
      */
+    const queryIdentifierIndex = arguments.indexOf(',');
+    const endOfListIDIndex = arguments.indexOf(';');
 
-    const identifierIndex = arguments.indexOf(',');
+    //the link element that our query is going to search for
+    const linkIdentifier = arguments.slice(0, queryIdentifierIndex);
 
-    //the element that our query is going to search for
-    const identifier = arguments.slice(0, identifierIndex);
+    //the img element that our query is going to search for
+    const imgIdentifier = arguments.slice(queryIdentifierIndex + 1, endOfListIDIndex);
 
     //the element at the end of our current links list
-    const EndOfListID = arguments.slice(identifierIndex + 1);
-    console.log(identifier);
+    const EndOfListID = arguments.slice(endOfListIDIndex + 1);
     console.log(EndOfListID);
 
-    const NodeLinkList = document.querySelectorAll(`${identifier}`);
-    //const NodeAltList = document.querySelectorAll(`article img`);
-    let linksToBeAdded = [];
-    //console.log(`getting end of list item:  ${NodeLinkList.item(NodeLinkList.length - 1).href}`);
+    const nodeLinkList = document.querySelectorAll(`${linkIdentifier}`);
+    const nodeAltList = document.querySelectorAll(`${imgIdentifier}`);
+    let dataToAdd = [];
+    //console.log(`getting end of list item:  ${nodeLinkList.item(nodeLinkList.length - 1).href}`);
     //checking if the last  item we added to the list is the item in the browser
-    if (NodeLinkList.item(NodeLinkList.length - 1).href == EndOfListID) {
+    if (nodeLinkList.item(nodeLinkList.length - 1).href == EndOfListID) {
         console.log(`all elements have been added up to this point`);
-        return linksToBeAdded;
+        return dataToAdd;
     } else {
-        for (let i = 0; i < NodeLinkList.length; i++) {
+        for (let i = 0; i < nodeLinkList.length; i++) {
             console.log('FOR LOOP: in nodelist of appendlinks');
-            console.log(`the element is: ${NodeLinkList.item(i).href}`);
+            console.log(`the element is: ${nodeLinkList.item(i).href}`);
             console.log(`the endOfListID is: ${EndOfListID}`);
-            if (NodeLinkList.item(i).href == EndOfListID) {
+            if (nodeLinkList.item(i).href == EndOfListID) {
                 console.log(`MATCH FOUND now adding new elements`);
-                console.log(`THE FOUND MATCH(should be last element in array is: ${NodeLinkList.item(i).href})`)
+                console.log(`THE FOUND MATCH(should be last element in array is: ${nodeLinkList.item(i).href})`)
                 i++;
-                while (i < NodeLinkList.length) {
-                    console.log(`ADDING ELEMENT: ${NodeLinkList.item(i).href}`);
-                    linksToBeAdded.push(NodeLinkList.item(i).href);
+                while (i < nodeLinkList.length) {
+                    console.log(`ADDING ELEMENT: ${nodeLinkList.item(i).href}`);
+                    dataToAdd.push([nodeLinkList.item(i).href, nodeAltList.item(i).alt]);
                     i++;
                 }
-                return linksToBeAdded;
+                return dataToAdd;
             }
         }
         console.log(`last item in list was not found, so nothing could be added :(`);
-        return linksToBeAdded;
+        return dataToAdd;
     }
 }
 
@@ -122,6 +124,14 @@ async function getData(page) {
     links = await page.evaluate(extractLinks, 'article a');
     imgs = await page.evaluate(extractImgs, 'article img');
 
+    //initializing the start of the data list with the first posts that were loaded
+    let data = [];
+    for (let i = 0; i < links.length; i++) {
+        data[i] = [links[i], imgs[i]];
+    }
+
+    console.log(data);
+
     /**this was used when we were checking if the last post id still existed
         //takes the href of the last post loaded and stores it in lastPostID
         let lastPostLink = links[links.length - 1];
@@ -130,7 +140,7 @@ async function getData(page) {
         //let scrolled = await page.evaluate(scrollDown, lastPostID, page);
     */
     console.log('in scroll down');
-    //let scrollDelay = 1000;
+    let scrollDelay = 1000;
     //console.log(lastPostID);
     //let elementExists = await page.evaluate(extractItem, `article a[href='${lastPostID}']`);
     //console.log(`after extract` + elementExists);
@@ -146,31 +156,29 @@ async function getData(page) {
             });
         });
         await page.waitForFunction(`document.body.scrollHeight > ${previousHeight}`);
-        //await page.waitFor(scrollDelay);
+        await page.waitFor(scrollDelay);
         //checks if elementExists is not null
 
-        let lastPostLink = links[links.length - 1];
+        let lastPostLink = data[data.length - 1][0];
         console.log(lastPostLink);
         //let lastPostID = lastPostLink.replace(`https://www.instagram.com`, ``);
-        const linksToAdd = await page.evaluate(appendLinks, `article a,${lastPostLink}`);
-        if (linksToAdd.length == 0) {
+        const newData = await page.evaluate(appendData, `article a,article img;${lastPostLink}`);
+        if (newData.length == 0) {
             console.log(`no elements were added after this scroll`);
         } else {
-            links = links.concat(linksToAdd);
+            data = data.concat(newData);
             console.log(`added new elements to links on this scroll`);
-            console.log(`new length of links is: ${links.length}`);
+            console.log(`new length of data is: ${data.length}`);
         }
-        console.log(links);
+        console.log(data);
 
         //elementExists = await page.evaluate(extractItem, `article a[href='${lastPostID}']`);
         //console.log(`after extract ` + elementExists);
         console.log(counter);
         counter++;
     }
-    //console.log(lastPostID);
 
-    //const urls = Array.from(posts).map(v => v.href);
-    return links;
+    return data;
     //return posts;
 }
 
@@ -193,7 +201,7 @@ const scrapeImages = async () => {
     //Social Page
     await page.waitFor(3000);
 
-    await page.goto(`https://www.instagram.com/isetups/`);
+    await page.goto(`https://www.instagram.com/daquan/`);
     await page.screenshot({ path: '3.png' });
 
     await page.waitForSelector('img', {
@@ -208,7 +216,7 @@ const scrapeImages = async () => {
 }
 
 scrapeImages().then((urls) => {
-    console.log(urls);
+    //console.log(urls);
     console.log('done');
 }).catch((e) =>
     console.log('Error: ' + e)
