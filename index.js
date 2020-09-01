@@ -190,19 +190,19 @@ const scrapeImages = async () => {
 
     await page.goto('https://www.instagram.com/accounts/login');
     await page.waitFor(3000);
-    await page.screenshot({ path: '1.png' });
+    //await page.screenshot({ path: '1.png' });
 
     //Login form
     await page.type('[name=username]', 'sebsuckss');
     await page.type('[name=password]', 'Sebastian10');
-    await page.screenshot({ path: '2.png' });
+    //await page.screenshot({ path: '2.png' });
     await page.click('[type=submit]');
 
     //Social Page
     await page.waitFor(3000);
 
     await page.goto(`https://www.instagram.com/daquan/`);
-    await page.screenshot({ path: '3.png' });
+    //await page.screenshot({ path: '3.png' });
 
     await page.waitForSelector('img', {
         visible: true,
