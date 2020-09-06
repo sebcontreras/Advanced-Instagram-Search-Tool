@@ -44,7 +44,7 @@ function extractLinks(identifier) {
     for (let element of selector) {
         items.push(element.href);
     }
-    console.log(items);
+    //console.log(items);
     return items;
 }
 
@@ -54,7 +54,7 @@ function extractImgs(identifier) {
     for (let element of selector) {
         items.push(element.alt);
     }
-    console.log(items);
+    //console.log(items);
     return items;
 }
 
@@ -68,50 +68,64 @@ function extractItem(identifier) {
 }
 
 //before we do this lets add data of all posts
-function appendData(arguments) {
-    /**
-     * these statements parse the serealizabale argument that was passed into useable data
-     */
-    const queryIdentifierIndex = arguments.indexOf(',');
-    const endOfListIDIndex = arguments.indexOf(';');
-
-    //the link element that our query is going to search for
-    const linkIdentifier = arguments.slice(0, queryIdentifierIndex);
-
-    //the img element that our query is going to search for
-    const imgIdentifier = arguments.slice(queryIdentifierIndex + 1, endOfListIDIndex);
-
-    //the element at the end of our current links list
-    const EndOfListID = arguments.slice(endOfListIDIndex + 1);
+function appendData(passedData) {
+    let data = [...passedData];
+    const EndOfListID = data[data.length - 2][0];
     console.log(EndOfListID);
+    //data[0] = 444;
 
-    const nodeLinkList = document.querySelectorAll(`${linkIdentifier}`);
-    const nodeAltList = document.querySelectorAll(`${imgIdentifier}`);
+    let nodeLinkList = document.querySelectorAll(`article a`);
+    let nodeAltList = document.querySelectorAll(`article img`);
     let dataToAdd = [];
+
     //console.log(`getting end of list item:  ${nodeLinkList.item(nodeLinkList.length - 1).href}`);
     //checking if the last  item we added to the list is the item in the browser
     if (nodeLinkList.item(nodeLinkList.length - 1).href == EndOfListID) {
         console.log(`all elements have been added up to this point`);
         return dataToAdd;
     } else {
+        let nextToCheckIndex = data[data.length - 1];
+        let nextToCheck = data[nextToCheckIndex][0];
+        console.log(`the final element: ` + nextToCheck + `, at index: ` + nextToCheckIndex);
         for (let i = 0; i < nodeLinkList.length; i++) {
-            console.log('FOR LOOP: in nodelist of appendlinks');
-            console.log(`the element is: ${nodeLinkList.item(i).href}`);
-            console.log(`the endOfListID is: ${EndOfListID}`);
-            if (nodeLinkList.item(i).href == EndOfListID) {
+            //console.log('FOR LOOP: in nodelist of appendlinks');
+            //console.log(`the element is: ${nodeLinkList.item(i).href}`);
+            //console.log(`the endOfListID is: ${EndOfListID}`);
+            if (nodeLinkList.item(i).href == nextToCheck) {
+                console.log(`THIS IS THE CHECK`);
+                let j = i;
+                while (nextToCheckIndex < data.length - 1) {
+                    console.log(`NodeAltList At J: ${nodeAltList[j].alt} , 
+                                data at next to check index: ${data[nextToCheckIndex][1]}`);
+                    if (nodeAltList[j].alt != data[nextToCheckIndex][1]) {
+                        console.log(`inside if statement`);
+                        data[nextToCheckIndex][2] = data[nextToCheckIndex][1];
+                        data[nextToCheckIndex][1] = nodeAltList[j].alt;
+                        console.log(`just past if statement`);
+                    }
+                    nextToCheckIndex++;
+                    j++;
+                }
+                data.pop();
+            }
+            else if (nodeLinkList.item(i).href == EndOfListID) {
                 console.log(`MATCH FOUND now adding new elements`);
                 console.log(`THE FOUND MATCH(should be last element in array is: ${nodeLinkList.item(i).href})`)
                 i++;
                 while (i < nodeLinkList.length) {
-                    console.log(`ADDING ELEMENT: ${nodeLinkList.item(i).href}`);
-                    dataToAdd.push([nodeLinkList.item(i).href, nodeAltList.item(i).alt]);
+                    console.log(`ADDING ELEMENT ALT: ${nodeAltList.item(i).alt}`);
+                    //dataToAdd.push([nodeLinkList.item(i).href, nodeAltList.item(i).alt]);
+                    data.push([nodeLinkList.item(i).href, nodeAltList.item(i).alt]);
                     i++;
                 }
-                return dataToAdd;
+                data.push(nextToCheckIndex);
+                return data;
+                //return dataToAdd;
             }
         }
         console.log(`last item in list was not found, so nothing could be added :(`);
-        return dataToAdd;
+        //return dataToAdd;
+        return data;
     }
 }
 
@@ -124,13 +138,20 @@ async function getData(page) {
     links = await page.evaluate(extractLinks, 'article a');
     imgs = await page.evaluate(extractImgs, 'article img');
 
-    //initializing the start of the data list with the first posts that were loaded
+    /**
+     * initializing the start of the data list with the first posts that were load,
+     * the first element is 1 because thats the index of the first element that we 
+     * should check for img alt change
+     */
     let data = [];
     for (let i = 0; i < links.length; i++) {
         data[i] = [links[i], imgs[i]];
     }
 
-    console.log(data);
+    let nextToCheck = 2;
+    data.push(nextToCheck);
+
+    //console.log(data);
 
     /**this was used when we were checking if the last post id still existed
         //takes the href of the last post loaded and stores it in lastPostID
@@ -152,21 +173,23 @@ async function getData(page) {
             window.scrollTo({
                 left: 0,
                 top: document.body.scrollHeight,
-                behavior: `auto`,
+                behavior: `smooth`,
             });
         });
         await page.waitForFunction(`document.body.scrollHeight > ${previousHeight}`);
         await page.waitFor(scrollDelay);
         //checks if elementExists is not null
 
-        let lastPostLink = data[data.length - 1][0];
-        console.log(lastPostLink);
+        //let lastPostLink = data[data.length - 1][0];
+        //console.log(lastPostLink);
         //let lastPostID = lastPostLink.replace(`https://www.instagram.com`, ``);
-        const newData = await page.evaluate(appendData, `article a,article img;${lastPostLink}`);
-        if (newData.length == 0) {
+        const pastLength = data.length;
+        console.log(`data length: ${pastLength}`);
+        data = [...await page.evaluate(appendData, data)];
+        if (data.length == pastLength) {
             console.log(`no elements were added after this scroll`);
         } else {
-            data = data.concat(newData);
+            //data = data.concat(newData);
             console.log(`added new elements to links on this scroll`);
             console.log(`new length of data is: ${data.length}`);
         }
@@ -186,7 +209,7 @@ const scrapeImages = async () => {
 
     const browser = await puppeteer.launch({ headless: false });
     const page = await browser.newPage();
-    page.setViewport({ width: 1280, height: 926 });
+    page.setViewport({ width: 1000, height: 926 });
 
     await page.goto('https://www.instagram.com/accounts/login');
     await page.waitFor(3000);
@@ -201,10 +224,11 @@ const scrapeImages = async () => {
     //Social Page
     await page.waitFor(3000);
 
-    await page.goto(`https://www.instagram.com/daquan/`);
+    await page.goto(`https://www.instagram.com/sadistic_memes`);
+    //await page.waitFor(3000);
     //await page.screenshot({ path: '3.png' });
 
-    await page.waitForSelector('img', {
+    await page.waitForSelector('article img', {
         visible: true,
     });
 
