@@ -205,6 +205,113 @@ async function getData(page) {
     //return posts;
 }
 
+function GetSingleImgElement() {
+    let imgElement = document.querySelector(`article>div>div>div>div>div>img`);
+    console.log(`the element is: ${imgElement}`);
+    if (!imgElement)
+        return `video`;
+    let imgAlt = imgElement.alt;
+    console.log(`the img alt is: ${imgAlt}`)
+    return imgAlt;
+}
+
+async function racePromises(promises) {
+    const wrappedPromises = [];
+    promises.map((promise, index) => {
+        wrappedPromises.push(
+            new Promise((resolve) => {
+                promise.then(() => {
+                    resolve(index);
+                })
+            })
+        )
+    })
+    return Promise.race(wrappedPromises);
+}
+
+async function GetProfileData(page) {
+
+    //let items = await page.evaluate(extractSelectors);
+    //getting the selectors of the first posts loaded
+    let links = [];
+    let imgs = [];
+    imgs = await page.evaluate(extractImgs, 'article img');
+    links = await page.evaluate(extractLinks, 'article a');
+
+    /**
+     * initializing the start of the data list with the first posts that were load,
+     * the first element is 1 because thats the index of the first element that we 
+     * should check for img alt change
+     */
+    let data = [];
+    for (let i = 0; i < 12; i++) {
+        data[i] = [links[i], imgs[i]];
+    }
+
+    console.log(data.length);
+    console.log(data);
+
+    console.log('in scroll past');
+    let scrollDelay = 1000;
+    counter = 0;
+
+    console.log(`length of links is: ${links.length}`);
+
+    let lastPostLink = links[11];
+    console.log(lastPostLink);
+    let lastPostID = lastPostLink.replace(`https://www.instagram.com`, ``)
+    //let scrolled = await page.evaluate(scrollDown, lastPostID, page);
+    await page.click(`article a[href="${lastPostID}"]`);
+    //await page.waitForSelector(`article>div>div>div>div>img`, { visible: true, });
+
+    while (data.length < 100) {
+
+        await page.waitForSelector(`a._65Bje.coreSpriteRightPaginationArrow`, { visible: true });
+        await page.click(`a._65Bje.coreSpriteRightPaginationArrow`);
+        await page.waitForSelector(`a._65Bje.coreSpriteRightPaginationArrow`, { visible: true });
+        //await page.waitForSelector(`article>div>div>div>div>img`, { visible: true, });
+        //await page.waitForSelector(`article>div>div>div>div>img`, `article>div>div>div>div>div>div>video`, { visible: true });
+        await Promise.race([
+            page.waitForSelector(`article>div>div>div>div>img`, { visible: true }),
+            page.waitForSelector(`article>div>div>div>div>div>img`, { visible: true }),
+            page.waitForSelector(`article>div>div>div>div>div>div>video`, { visible: true })
+        ]);
+        console.log(`got past wait for`);
+        /**
+        const imgOrVideo = await racePromises([
+            page.waitForSelector(`article>div>div>div>div>img`, { visible: true }),
+            page.waitForSelector(`article>div>div>div>div>div>div>video`, { visible: true })
+        ]);
+        
+        await page.waitFor(() =>
+            document.querySelectorAll(`article>div>div>div>div>img`, { visible: true }, `article>div>div>div>div>div>div>video`, { visible: true })
+        );
+        const imgOrVideo = await Promise.race([
+            page.waitForSelector(`article>div>div>div>div>img`, { timeout: 1000, visible: true, }),
+            page.waitForSelector(`article > div > div > div > div > div > video`, { timeout: 1000, visible: true })
+        ]);
+        */
+
+        let newLink = await page.url();
+        let newImg = await page.evaluate(GetSingleImgElement);
+
+
+        if (newLink && newImg) {
+            data.push([newLink, newImg]);
+        } else {
+            console.log(`no new element added`);
+        }
+        console.log(counter);
+        counter++;
+        console.log(data);
+        //#react-root > section > main > div > div._2z6nI > article > div:nth-child(1) > div > div:nth-child(1) > div:nth-child(1) > a > div > div.KL4Bh > img
+        //body > div._2dDPU.CkGkG > div.zZYga > div > article > div._97aPb > div > div > div.KL4Bh > img
+    }
+
+    return data;
+    //return posts;
+}
+
 const scrapeImages = async () => {
 
     const browser = await puppeteer.launch({ headless: false });
@@ -212,7 +319,7 @@ const scrapeImages = async () => {
     page.setViewport({ width: 1000, height: 926 });
 
     await page.goto('https://www.instagram.com/accounts/login');
-    await page.waitFor(3000);
+    await page.waitFor(1000);
     //await page.screenshot({ path: '1.png' });
 
     //Login form
@@ -224,7 +331,8 @@ const scrapeImages = async () => {
     //Social Page
     await page.waitFor(3000);
 
-    await page.goto(`https://www.instagram.com/sadistic_memes`);
+    //await page.goto(`https://www.instagram.com/babyyoda.official`);
+    await page.goto(`https://www.instagram.com/nike`);
     //await page.waitFor(3000);
     //await page.screenshot({ path: '3.png' });
 
@@ -232,7 +340,8 @@ const scrapeImages = async () => {
         visible: true,
     });
 
-    let data = await getData(page);
+    //let data = await getData(page);
+    let data = await GetProfileData(page);
 
     //await browser.close();
     //console.log(data);
