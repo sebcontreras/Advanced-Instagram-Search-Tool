@@ -52,6 +52,7 @@ function extractImgs(identifier) {
     const selector = document.querySelectorAll(`${identifier}`);
     let items = [];
     for (let element of selector) {
+        console.log(element.outerHTML);
         items.push(element.alt);
     }
     //console.log(items);
@@ -205,14 +206,24 @@ async function getData(page) {
     //return posts;
 }
 
-function GetSingleImgElement() {
-    let imgElement = document.querySelector(`article>div>div>div>div>div>img`);
-    console.log(`the element is: ${imgElement}`);
-    if (!imgElement)
-        return `video`;
-    let imgAlt = imgElement.alt;
-    console.log(`the img alt is: ${imgAlt}`)
-    return imgAlt;
+function GetSinglePostElement() {
+
+    let videoElement = document.querySelectorAll(`article>div>div>div>div>div>div>video, article>div>div>div>div>div>div>div>ul video`);
+    if (videoElement.length >= 1) {
+        console.log('video');
+        return 'video';
+    }
+
+    let imgElement = document.querySelectorAll(`article>div>div>div>div>div>img, article>div>div>div>div>img, article>div>div>div>div>div>div>div>ul img`);
+    if (imgElement.length >= 1) {
+        let imgAlt = ``;
+        for (let element of imgElement) {
+            imgAlt += element.alt;
+        }
+        return imgAlt;
+    } else {
+        return `no element was found`;
+    }
 }
 
 async function racePromises(promises) {
@@ -266,17 +277,28 @@ async function GetProfileData(page) {
 
     while (data.length < 100) {
 
+        //await page.evaluate(extractImgs, `body > div._2dDPU.CkGkG > div.zZYga`);
         await page.waitForSelector(`a._65Bje.coreSpriteRightPaginationArrow`, { visible: true });
+        //await page.evaluate(extractImgs, `body > div._2dDPU.CkGkG > div.zZYga`);
         await page.click(`a._65Bje.coreSpriteRightPaginationArrow`);
+        //await page.evaluate(extractImgs, `body > div._2dDPU.CkGkG > div.zZYga`);
         await page.waitForSelector(`a._65Bje.coreSpriteRightPaginationArrow`, { visible: true });
+        //await page.evaluate(extractImgs, `body > div._2dDPU.CkGkG > div.zZYga`);
         //await page.waitForSelector(`article>div>div>div>div>img`, { visible: true, });
         //await page.waitForSelector(`article>div>div>div>div>img`, `article>div>div>div>div>div>div>video`, { visible: true });
-        await Promise.race([
-            page.waitForSelector(`article>div>div>div>div>img`, { visible: true }),
-            page.waitForSelector(`article>div>div>div>div>div>img`, { visible: true }),
-            page.waitForSelector(`article>div>div>div>div>div>div>video`, { visible: true })
+
+        const un = await Promise.race([
+            page.waitForSelector(`article>div>div>div>div>img`, { timeout: 10000, visible: true }),
+            page.waitForSelector(`article>div>div>div>div>div>img`, { timeout: 10000, visible: true }),
+            page.waitForSelector(`article>div>div>div>div>div>div>div>ul img`, { timeout: 10000, visible: true }),
+            page.waitForSelector(`article>div>div>div>div>div>div>video`, { timeout: 10000, visible: true }),
+            page.waitForSelector(`article>div>div>div>div>div>div>div>ul video`, { timeout: 10000, visible: true })
         ]);
+
         console.log(`got past wait for`);
+        //page.evaluate(() => console.log(`got past wait race`));
+        //await page.evaluate(extractImgs, `body > div._2dDPU.CkGkG > div.zZYga`);
+
         /**
         const imgOrVideo = await racePromises([
             page.waitForSelector(`article>div>div>div>div>img`, { visible: true }),
@@ -293,7 +315,14 @@ async function GetProfileData(page) {
         */
 
         let newLink = await page.url();
-        let newImg = await page.evaluate(GetSingleImgElement);
+        /**
+        let newImg = await page.waitFor(() =>
+            document.querySelectorAll(`article>div>div>div>div>img`,
+                `article>div>div>div>div>div>img`,
+                `article>div>div>div>div>div>div>video`)
+        );
+        */
+        let newImg = await page.evaluate(GetSinglePostElement);
 
 
         if (newLink && newImg) {
@@ -332,7 +361,8 @@ const scrapeImages = async () => {
     await page.waitFor(3000);
 
     //await page.goto(`https://www.instagram.com/babyyoda.official`);
-    await page.goto(`https://www.instagram.com/nike`);
+    //await page.goto(`https://www.instagram.com/nike`);
+    await page.goto(`https://www.instagram.com/daquan`);
     //await page.waitFor(3000);
     //await page.screenshot({ path: '3.png' });
 
