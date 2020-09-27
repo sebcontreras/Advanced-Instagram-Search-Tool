@@ -12,7 +12,7 @@ const puppeteer = require('puppeteer');
 */
 
 class Post {
-    constructor(link, user, month, day, year, objects, text) {
+    constructor(link, user, month, day, year, objects, text, tagged) {
         this.date = {
             month,
             day,
@@ -24,7 +24,107 @@ class Post {
         };
         this.link = link;
         this.user = user;
+        this.tagged = tagged;
     }
+}
+
+function parseAutomatedPost(link, elementText) {
+    let index = elementText.indexOf('by') + 3;
+    let parsedString = elementText.slice(index);
+
+    //getting month
+    let month = '';
+    let months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+        'August', 'September', 'October', 'November', 'December'];
+
+    for (let current of months) {
+        if (parsedString.indexOf(` on ${current} `) !== -1) {
+            month = current;
+            break;
+        }
+    }
+
+    //set user, then  slice user and month
+    index = parsedString.indexOf(` on ${month} `);
+    const user = parsedString.slice(0, index);
+    parsedString = parsedString.slice(user.length + 5 + month.length);
+
+    //set day, then slice day
+    index = parsedString.indexOf(`, `);
+    const day = parsedString.slice(0, index);
+    parsedString = parsedString.slice(index + 2)
+
+    //set year, then slice year
+    const year = parsedString.slice(0, 4);
+    parsedString = parsedString.slice(5);
+
+    console.log(parsedString);
+
+    //if there is no 'image may contain or taggin', return info
+    if (parsedString.length <= 2)
+        return new Post(link, user, month, day, year, '', '', '');
+
+    //check for tags
+    let tags = [];
+    if (parsedString.indexOf('tagging @') !== -1 && parsedString.indexOf('tagging @') < 3) {
+        let temp = '';
+        if (parsedString.indexOf(' Image may contain:') !== -1)
+            temp = parsedString.slice(0, parsedString.indexOf('. Image may contain:'));
+        else
+            temp = parsedString.slice(0);
+        while (temp.length > 0) {
+            index = temp.indexOf(`@`);
+            temp = temp.slice(index + 1);
+            console.log(temp);
+            index = temp.indexOf(`, `);
+            if (index !== -1) {
+                tags.push(temp.slice(0, index));
+            } else {
+
+            }
+        }
+    }
+
+    //slice 'image may contain'
+    index = parsedString.indexOf(`: `);
+    parsedString = parsedString.slice(index + 2);
+
+    return new Post(link, user, month, day, year, 'instagen', '', '');
+}
+
+function CreatePostObjectFromData(element) {
+    const elementText = element[1];
+    if (elementText == 'video')
+        return new Post(element[0], 'user', '', '', '', 'video', '', '');
+    else if (elementText == '')
+        return new Post(element[0], 'user', '', '', '', '', '');
+    else if (elementText.startsWith('Photo by') || elementText.startsWith('Photo by', 1)
+        || elementText.startsWith('Photo shared') || elementText.startsWith('Photo shared', 1))
+        return parseAutomatedPost(element[0], elementText);
+    else
+        return new Post(element[0], 'user', '', '', '', '', elementText, '');
+}
+
+const parseData = async (data) => {
+
+    return new Promise((resolve, reject) => {
+        if (data.length == 0) {
+            reject('No data to be parsed');
+        } else if (data.length > 0) {
+            posts = [];
+            for (let element of data) {
+                posts.push(CreatePostObjectFromData(element));
+            }
+
+            let firstPost = new Post('https://www.instagram.com/accounts/login',
+                'sebsucks', 11, 10, 1999, ['2 person', 'outdoor', 'tennis'], 'this is a meme', '');
+            resolve(posts);
+        }
+    });
+    let firstPost = new Post('https://www.instagram.com/accounts/login',
+        'sebsucks', 11, 10, 1999, ['2 person', 'outdoor', 'tennis'], 'this is a meme');
+    return data[0];
+    return firstPost;
 }
 
 /**
@@ -275,7 +375,7 @@ async function GetProfileData(page) {
     await page.click(`article a[href="${lastPostID}"]`);
     //await page.waitForSelector(`article>div>div>div>div>img`, { visible: true, });
 
-    while (data.length < 100) {
+    while (data.length < 16) {
 
         //await page.evaluate(extractImgs, `body > div._2dDPU.CkGkG > div.zZYga`);
         await page.waitForSelector(`a._65Bje.coreSpriteRightPaginationArrow`, { visible: true });
@@ -361,8 +461,10 @@ const scrapeImages = async () => {
     await page.waitFor(3000);
 
     //await page.goto(`https://www.instagram.com/babyyoda.official`);
+    //await page.goto(`https://www.instagram.com/sadistic.memes`);
     //await page.goto(`https://www.instagram.com/nike`);
-    await page.goto(`https://www.instagram.com/daquan`);
+    await page.goto(`https://www.instagram.com/complex`);
+    //await page.goto(`https://www.instagram.com/daquan`);
     //await page.waitFor(3000);
     //await page.screenshot({ path: '3.png' });
 
@@ -372,15 +474,14 @@ const scrapeImages = async () => {
 
     //let data = await getData(page);
     let data = await GetProfileData(page);
-
     //await browser.close();
     //console.log(data);
     return data;
 }
-
-scrapeImages().then((urls) => {
-    //console.log(urls);
-    console.log('done');
-}).catch((e) =>
-    console.log('Error: ' + e)
-);
+//let posts = [];
+scrapeImages()
+    .then(rawData => parseData(rawData))
+    .then(parsedData => console.log(JSON.stringify(parsedData)))
+    .catch((e) =>
+        console.log('Error: ' + e)
+    );
