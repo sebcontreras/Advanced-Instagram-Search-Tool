@@ -34,6 +34,9 @@ function parseAutomatedPost(link, elementText) {
 
     //getting month
     let month = '';
+    let day = '';
+    let year = '';
+    let user = '';
     let months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
         'August', 'September', 'October', 'November', 'December'];
 
@@ -44,21 +47,22 @@ function parseAutomatedPost(link, elementText) {
         }
     }
 
-    //set user, then  slice user and month
-    index = parsedString.indexOf(` on ${month} `);
-    const user = parsedString.slice(0, index);
-    parsedString = parsedString.slice(user.length + 5 + month.length);
+    //check if a date was found, if not, format is different and user should be neext
+    if (month !== '') {
+        //set user, then  slice user and month
+        index = parsedString.indexOf(` on ${month} `);
+        user = parsedString.slice(0, index);
+        parsedString = parsedString.slice(user.length + 5 + month.length);
 
-    //set day, then slice day
-    index = parsedString.indexOf(`, `);
-    const day = parsedString.slice(0, index);
-    parsedString = parsedString.slice(index + 2)
+        //set day, then slice day
+        index = parsedString.indexOf(`, `);
+        day = parsedString.slice(0, index);
+        parsedString = parsedString.slice(index + 2)
 
-    //set year, then slice year
-    const year = parsedString.slice(0, 4);
-    parsedString = parsedString.slice(5);
-
-    console.log(parsedString);
+        //set year, then slice year
+        year = parsedString.slice(0, 4);
+        parsedString = parsedString.slice(5);
+    }
 
     //if there is no 'image may contain or taggin', return info
     if (parsedString.length <= 2)
@@ -66,21 +70,37 @@ function parseAutomatedPost(link, elementText) {
 
     //check for tags
     let tags = [];
-    if (parsedString.indexOf('tagging @') !== -1 && parsedString.indexOf('tagging @') < 3) {
+    if (parsedString.indexOf('tagging @') !== -1 || parsedString.indexOf('@') !== -1) {
         let temp = '';
-        if (parsedString.indexOf(' Image may contain:') !== -1)
+        if (parsedString.indexOf('. Image may contain:') !== -1)
             temp = parsedString.slice(0, parsedString.indexOf('. Image may contain:'));
         else
             temp = parsedString.slice(0);
         while (temp.length > 0) {
+            //checking to see if more tags exist, if not -> exit loop
             index = temp.indexOf(`@`);
+            if (index == -1) {
+                console.log(`no @ found`);
+                break;
+            }
+            //slice just past @
             temp = temp.slice(index + 1);
             console.log(temp);
-            index = temp.indexOf(`, `);
-            if (index !== -1) {
-                tags.push(temp.slice(0, index));
-            } else {
 
+            //comma indicates end of tag if more tags still appear
+            //if comma doesn't exist, push remainder of temp and break;
+            index = temp.indexOf(`,`);
+            if (index == -1) {
+                console.log(`no comma found`);
+                tags.push(temp.slice(0));
+                break;
+            }
+            //if comma exists, push up to comme, slice after comma.
+            else if (index !== -1) {
+                console.log(`comma found`);
+                tags.push(temp.slice(0, index));
+                temp = temp.slice(index + 1)
+                console.log(`after found comma slicing, string is: ${temp}`);
             }
         }
     }
@@ -89,7 +109,7 @@ function parseAutomatedPost(link, elementText) {
     index = parsedString.indexOf(`: `);
     parsedString = parsedString.slice(index + 2);
 
-    return new Post(link, user, month, day, year, 'instagen', '', '');
+    return new Post(link, user, month, day, year, 'instagen', elementText, tags);
 }
 
 function CreatePostObjectFromData(element) {
@@ -465,6 +485,7 @@ const scrapeImages = async () => {
     //await page.goto(`https://www.instagram.com/nike`);
     await page.goto(`https://www.instagram.com/complex`);
     //await page.goto(`https://www.instagram.com/daquan`);
+    //await page.goto(`https://www.instagram.com/araltasher`);
     //await page.waitFor(3000);
     //await page.screenshot({ path: '3.png' });
 
