@@ -12,7 +12,8 @@ const puppeteer = require('puppeteer');
 */
 
 class Post {
-    constructor(link, user, month, day, year, objects, text, tagged) {
+    constructor(type, link, user, month, day, year, objects, text, tagged, original) {
+        this.type = type;
         this.date = {
             month,
             day,
@@ -20,7 +21,8 @@ class Post {
         };
         this.imgAlt = {
             objects,
-            text
+            text,
+            original
         };
         this.link = link;
         this.user = user;
@@ -28,26 +30,122 @@ class Post {
     }
 }
 
-function parseAutomatedPost(link, elementText) {
-    let index = elementText.indexOf('by') + 3;
-    let parsedString = elementText.slice(index);
+function getPostText(parsedString) {
+    console.log(parsedString);
+    let text = '';
+    let index = parsedString.indexOf(`text that says '`);
 
-    //getting month
-    let month = '';
-    let day = '';
-    let year = '';
-    let user = '';
+    if (index !== -1) {
+        parsedString = parsedString.slice(index + 16, -2);
+        text = parsedString;
+        console.log(parsedString);
+    }
+    return text;
+}
+
+function getPostObjects(parsedString) {
+    parsedString = parsedString.toLowerCase();
+    let objects = [];
+
+    //if may contain only has text and no objects, return empty list
+    if (parsedString.indexOf(`image may contain: text`) !== -1)
+        return objects;
+
+    let index = parsedString.indexOf(`image may contain:`);
+
+    //checking if their exists an image may contain list, if so, splice
+    //'image may contain
+    if (index !== -1) {
+        parsedString = parsedString.slice(index);
+        index = parsedString.indexOf(`: `);
+        parsedString = parsedString.slice(index + 2);
+        //find the end of the list by looking for a period or 'text that says, if end of list exists
+        //slice up to period
+        index = parsedString.indexOf(', text');
+        if (index !== -1) {
+            parsedString = parsedString.slice(0, index);
+        } else if (parsedString.indexOf('text') !== -1) {
+            parsedString = parsedString.slice(0, index);
+        } else if (parsedString.indexOf('.') !== -1) {
+            index = parsedString.indexOf('.');
+            parsedString = parsedString.slice(0, index);
+        }
+        //replace all ', ' and ' and ' with ',' in order to assist the split function
+        //in creating an array
+        parsedString = parsedString.replace(/(\sand\s)|(,\s)/g, ',');
+        const listIdentifiers = /,/g;
+        objects = parsedString.split(listIdentifiers);
+    }
+
+    return objects;
+}
+
+function getPostTags(parsedString) {
+    let tags = [];
+    if (parsedString.indexOf('tagging @') !== -1 || parsedString.indexOf('@') !== -1) {
+        if (parsedString.indexOf('. Image may contain:') !== -1)
+            parsedString = parsedString.slice(0, parsedString.indexOf('. Image may contain:'));
+        else
+            parsedString = parsedString.slice(0);
+        while (parsedString.length > 0) {
+            //checking to see if more tags exist, if not -> exit loop
+            index = parsedString.indexOf(`@`);
+            if (index == -1) {
+                //console.log(`no @ found`);
+                break;
+            }
+            //slice just past @
+            parsedString = parsedString.slice(index + 1);
+            //console.log(temp);
+
+            //comma indicates end of tag if more tags still appear
+            //if comma doesn't exist, push remainder of temp and break;
+            index = parsedString.indexOf(`,`);
+            if (index == -1) {
+                //console.log(`no comma found`);
+                tags.push(parsedString.slice(0));
+                break;
+            }
+            //if comma exists, push up to comme, slice after comma.
+            else if (index !== -1) {
+                //console.log(`comma found`);
+                tags.push(parsedString.slice(0, index));
+                parsedString = parsedString.slice(index + 1)
+                //console.log(`after found comma slicing, string is: ${temp}`);
+            }
+        }
+    }
+    return tags;
+}
+
+function getMonth(parsedString) {
     let months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
         'August', 'September', 'October', 'November', 'December'];
-
+    let month = '';
     for (let current of months) {
         if (parsedString.indexOf(` on ${current} `) !== -1) {
             month = current;
             break;
         }
     }
+    return month;
+}
 
-    //check if a date was found, if not, format is different and user should be neext
+function parseAutomatedPost(link, elementText) {
+    let index = elementText.indexOf('by') + 3;
+    let parsedString = elementText.slice(index);
+
+    //getting month
+    let month = getMonth(parsedString);
+    let day = '';
+    let year = '';
+    let user = '';
+    let tags;
+    let objects;
+    let text;
+
+
+    //check if a date was found, if not, format is different and user should be next
     if (month !== '') {
         //set user, then  slice user and month
         index = parsedString.indexOf(` on ${month} `);
@@ -66,63 +164,30 @@ function parseAutomatedPost(link, elementText) {
 
     //if there is no 'image may contain or taggin', return info
     if (parsedString.length <= 2)
-        return new Post(link, user, month, day, year, '', '', '');
+        return new Post('automatedPhoto', link, user, month, day, year, '', '', '', elementText);
 
     //check for tags
-    let tags = [];
-    if (parsedString.indexOf('tagging @') !== -1 || parsedString.indexOf('@') !== -1) {
-        let temp = '';
-        if (parsedString.indexOf('. Image may contain:') !== -1)
-            temp = parsedString.slice(0, parsedString.indexOf('. Image may contain:'));
-        else
-            temp = parsedString.slice(0);
-        while (temp.length > 0) {
-            //checking to see if more tags exist, if not -> exit loop
-            index = temp.indexOf(`@`);
-            if (index == -1) {
-                console.log(`no @ found`);
-                break;
-            }
-            //slice just past @
-            temp = temp.slice(index + 1);
-            console.log(temp);
+    tags = getPostTags(parsedString);
 
-            //comma indicates end of tag if more tags still appear
-            //if comma doesn't exist, push remainder of temp and break;
-            index = temp.indexOf(`,`);
-            if (index == -1) {
-                console.log(`no comma found`);
-                tags.push(temp.slice(0));
-                break;
-            }
-            //if comma exists, push up to comme, slice after comma.
-            else if (index !== -1) {
-                console.log(`comma found`);
-                tags.push(temp.slice(0, index));
-                temp = temp.slice(index + 1)
-                console.log(`after found comma slicing, string is: ${temp}`);
-            }
-        }
-    }
+    //check for objects
+    objects = getPostObjects(parsedString);
 
-    //slice 'image may contain'
-    index = parsedString.indexOf(`: `);
-    parsedString = parsedString.slice(index + 2);
+    text = getPostText(parsedString);
 
-    return new Post(link, user, month, day, year, 'instagen', elementText, tags);
+    return new Post('automatedPhoto', link, user, month, day, year, objects, text, tags, elementText);
 }
 
 function CreatePostObjectFromData(element) {
     const elementText = element[1];
     if (elementText == 'video')
-        return new Post(element[0], 'user', '', '', '', 'video', '', '');
+        return new Post('video', element[0], '', '', '', '', '', '', '', elementText);
     else if (elementText == '')
-        return new Post(element[0], 'user', '', '', '', '', '');
+        return new Post('empty', element[0], '', '', '', '', '', '', '', elementText);
     else if (elementText.startsWith('Photo by') || elementText.startsWith('Photo by', 1)
         || elementText.startsWith('Photo shared') || elementText.startsWith('Photo shared', 1))
         return parseAutomatedPost(element[0], elementText);
     else
-        return new Post(element[0], 'user', '', '', '', '', elementText, '');
+        return new Post('userPhoto', element[0], '', '', '', '', '', '', elementText);
 }
 
 const parseData = async (data) => {
@@ -135,16 +200,9 @@ const parseData = async (data) => {
             for (let element of data) {
                 posts.push(CreatePostObjectFromData(element));
             }
-
-            let firstPost = new Post('https://www.instagram.com/accounts/login',
-                'sebsucks', 11, 10, 1999, ['2 person', 'outdoor', 'tennis'], 'this is a meme', '');
             resolve(posts);
         }
     });
-    let firstPost = new Post('https://www.instagram.com/accounts/login',
-        'sebsucks', 11, 10, 1999, ['2 person', 'outdoor', 'tennis'], 'this is a meme');
-    return data[0];
-    return firstPost;
 }
 
 /**
@@ -480,10 +538,10 @@ const scrapeImages = async () => {
     //Social Page
     await page.waitFor(3000);
 
-    //await page.goto(`https://www.instagram.com/babyyoda.official`);
+    await page.goto(`https://www.instagram.com/babyyoda.official`);
     //await page.goto(`https://www.instagram.com/sadistic.memes`);
     //await page.goto(`https://www.instagram.com/nike`);
-    await page.goto(`https://www.instagram.com/complex`);
+    //await page.goto(`https://www.instagram.com/complex`);
     //await page.goto(`https://www.instagram.com/daquan`);
     //await page.goto(`https://www.instagram.com/araltasher`);
     //await page.waitFor(3000);
