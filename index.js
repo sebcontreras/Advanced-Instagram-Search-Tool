@@ -1,6 +1,7 @@
 const request = require('request');
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
+const post = require('./post');
 
 /**
  * request('https://www.instagram.com/sebsucks/', (error,
@@ -11,185 +12,6 @@ const puppeteer = require('puppeteer');
 });
 */
 
-class Post {
-    constructor(type, link, user, month, day, year, objects, text, tagged, original) {
-        this.type = type;
-        this.date = {
-            month,
-            day,
-            year
-        };
-        this.imgAlt = {
-            objects,
-            text,
-            original
-        };
-        this.link = link;
-        this.user = user;
-        this.tagged = tagged;
-    }
-}
-
-function getPostText(parsedString) {
-    console.log(parsedString);
-    let text = '';
-    let index = parsedString.indexOf(`text that says '`);
-
-    if (index !== -1) {
-        parsedString = parsedString.slice(index + 16, -2);
-        text = parsedString;
-        console.log(parsedString);
-    }
-    return text;
-}
-
-function getPostObjects(parsedString) {
-    parsedString = parsedString.toLowerCase();
-    let objects = [];
-
-    //if may contain only has text and no objects, return empty list
-    if (parsedString.indexOf(`image may contain: text`) !== -1)
-        return objects;
-
-    let index = parsedString.indexOf(`image may contain:`);
-
-    //checking if their exists an image may contain list, if so, splice
-    //'image may contain
-    if (index !== -1) {
-        parsedString = parsedString.slice(index);
-        index = parsedString.indexOf(`: `);
-        parsedString = parsedString.slice(index + 2);
-        //find the end of the list by looking for a period or 'text that says, if end of list exists
-        //slice up to period
-        index = parsedString.indexOf(', text');
-        if (index !== -1) {
-            parsedString = parsedString.slice(0, index);
-        } else if (parsedString.indexOf('text') !== -1) {
-            parsedString = parsedString.slice(0, index);
-        } else if (parsedString.indexOf('.') !== -1) {
-            index = parsedString.indexOf('.');
-            parsedString = parsedString.slice(0, index);
-        }
-        //replace all ', ' and ' and ' with ',' in order to assist the split function
-        //in creating an array
-        parsedString = parsedString.replace(/(\sand\s)|(,\s)/g, ',');
-        const listIdentifiers = /,/g;
-        objects = parsedString.split(listIdentifiers);
-    }
-
-    return objects;
-}
-
-function getPostTags(parsedString) {
-    let tags = [];
-    if (parsedString.indexOf('tagging @') !== -1 || parsedString.indexOf('@') !== -1) {
-        if (parsedString.indexOf('. Image may contain:') !== -1)
-            parsedString = parsedString.slice(0, parsedString.indexOf('. Image may contain:'));
-        else
-            parsedString = parsedString.slice(0);
-        while (parsedString.length > 0) {
-            //checking to see if more tags exist, if not -> exit loop
-            index = parsedString.indexOf(`@`);
-            if (index == -1) {
-                //console.log(`no @ found`);
-                break;
-            }
-            //slice just past @
-            parsedString = parsedString.slice(index + 1);
-            //console.log(temp);
-
-            //comma indicates end of tag if more tags still appear
-            //if comma doesn't exist, push remainder of temp and break;
-            index = parsedString.indexOf(`,`);
-            if (index == -1) {
-                //console.log(`no comma found`);
-                tags.push(parsedString.slice(0));
-                break;
-            }
-            //if comma exists, push up to comme, slice after comma.
-            else if (index !== -1) {
-                //console.log(`comma found`);
-                tags.push(parsedString.slice(0, index));
-                parsedString = parsedString.slice(index + 1)
-                //console.log(`after found comma slicing, string is: ${temp}`);
-            }
-        }
-    }
-    return tags;
-}
-
-function getMonth(parsedString) {
-    let months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-        'August', 'September', 'October', 'November', 'December'];
-    let month = '';
-    for (let current of months) {
-        if (parsedString.indexOf(` on ${current} `) !== -1) {
-            month = current;
-            break;
-        }
-    }
-    return month;
-}
-
-function parseAutomatedPost(link, elementText) {
-    let index = elementText.indexOf('by') + 3;
-    let parsedString = elementText.slice(index);
-
-    //getting month
-    let month = getMonth(parsedString);
-    let day = '';
-    let year = '';
-    let user = '';
-    let tags;
-    let objects;
-    let text;
-
-
-    //check if a date was found, if not, format is different and user should be next
-    if (month !== '') {
-        //set user, then  slice user and month
-        index = parsedString.indexOf(` on ${month} `);
-        user = parsedString.slice(0, index);
-        parsedString = parsedString.slice(user.length + 5 + month.length);
-
-        //set day, then slice day
-        index = parsedString.indexOf(`, `);
-        day = parsedString.slice(0, index);
-        parsedString = parsedString.slice(index + 2)
-
-        //set year, then slice year
-        year = parsedString.slice(0, 4);
-        parsedString = parsedString.slice(5);
-    }
-
-    //if there is no 'image may contain or taggin', return info
-    if (parsedString.length <= 2)
-        return new Post('automatedPhoto', link, user, month, day, year, '', '', '', elementText);
-
-    //check for tags
-    tags = getPostTags(parsedString);
-
-    //check for objects
-    objects = getPostObjects(parsedString);
-
-    text = getPostText(parsedString);
-
-    return new Post('automatedPhoto', link, user, month, day, year, objects, text, tags, elementText);
-}
-
-function CreatePostObjectFromData(element) {
-    const elementText = element[1];
-    if (elementText == 'video')
-        return new Post('video', element[0], '', '', '', '', '', '', '', elementText);
-    else if (elementText == '')
-        return new Post('empty', element[0], '', '', '', '', '', '', '', elementText);
-    else if (elementText.startsWith('Photo by') || elementText.startsWith('Photo by', 1)
-        || elementText.startsWith('Photo shared') || elementText.startsWith('Photo shared', 1))
-        return parseAutomatedPost(element[0], elementText);
-    else
-        return new Post('userPhoto', element[0], '', '', '', '', '', '', elementText);
-}
-
 const parseData = async (data) => {
 
     return new Promise((resolve, reject) => {
@@ -198,22 +20,12 @@ const parseData = async (data) => {
         } else if (data.length > 0) {
             posts = [];
             for (let element of data) {
-                posts.push(CreatePostObjectFromData(element));
+                posts.push(post.CreatePostObjectFromData(element));
             }
             resolve(posts);
         }
     });
 }
-
-/**
- * let firstPost = new Post('https://www.instagram.com/accounts/login',
-    'sebsucks', 11, 10, 1999, ['2 person', 'outdoor', 'tennis'], 'this is a meme');
-
-console.log(firstPost);
-console.log(firstPost.imgAlt);
-console.log(firstPost.imgAlt.objects[1]);
-
-*/
 
 //this is working perfect, DO NOT CHANGE
 function extractLinks(identifier) {
@@ -230,7 +42,7 @@ function extractImgs(identifier) {
     const selector = document.querySelectorAll(`${identifier}`);
     let items = [];
     for (let element of selector) {
-        console.log(element.outerHTML);
+        //console.log(element.outerHTML);
         items.push(element.alt);
     }
     //console.log(items);
@@ -250,7 +62,7 @@ function extractItem(identifier) {
 function appendData(passedData) {
     let data = [...passedData];
     const EndOfListID = data[data.length - 2][0];
-    console.log(EndOfListID);
+    //console.log(EndOfListID);
     //data[0] = 444;
 
     let nodeLinkList = document.querySelectorAll(`article a`);
@@ -260,27 +72,27 @@ function appendData(passedData) {
     //console.log(`getting end of list item:  ${nodeLinkList.item(nodeLinkList.length - 1).href}`);
     //checking if the last  item we added to the list is the item in the browser
     if (nodeLinkList.item(nodeLinkList.length - 1).href == EndOfListID) {
-        console.log(`all elements have been added up to this point`);
+        //console.log(`all elements have been added up to this point`);
         return dataToAdd;
     } else {
         let nextToCheckIndex = data[data.length - 1];
         let nextToCheck = data[nextToCheckIndex][0];
-        console.log(`the final element: ` + nextToCheck + `, at index: ` + nextToCheckIndex);
+        //console.log(`the final element: ` + nextToCheck + `, at index: ` + nextToCheckIndex);
         for (let i = 0; i < nodeLinkList.length; i++) {
             //console.log('FOR LOOP: in nodelist of appendlinks');
             //console.log(`the element is: ${nodeLinkList.item(i).href}`);
             //console.log(`the endOfListID is: ${EndOfListID}`);
             if (nodeLinkList.item(i).href == nextToCheck) {
-                console.log(`THIS IS THE CHECK`);
+                //console.log(`THIS IS THE CHECK`);
                 let j = i;
                 while (nextToCheckIndex < data.length - 1) {
-                    console.log(`NodeAltList At J: ${nodeAltList[j].alt} , 
-                                data at next to check index: ${data[nextToCheckIndex][1]}`);
+                    //console.log(`NodeAltList At J: ${nodeAltList[j].alt} , 
+                    //            data at next to check index: ${data[nextToCheckIndex][1]}`);
                     if (nodeAltList[j].alt != data[nextToCheckIndex][1]) {
-                        console.log(`inside if statement`);
+                        //console.log(`inside if statement`);
                         data[nextToCheckIndex][2] = data[nextToCheckIndex][1];
                         data[nextToCheckIndex][1] = nodeAltList[j].alt;
-                        console.log(`just past if statement`);
+                        //console.log(`just past if statement`);
                     }
                     nextToCheckIndex++;
                     j++;
@@ -288,11 +100,11 @@ function appendData(passedData) {
                 data.pop();
             }
             else if (nodeLinkList.item(i).href == EndOfListID) {
-                console.log(`MATCH FOUND now adding new elements`);
-                console.log(`THE FOUND MATCH(should be last element in array is: ${nodeLinkList.item(i).href})`)
+                //console.log(`MATCH FOUND now adding new elements`);
+                //console.log(`THE FOUND MATCH(should be last element in array is: ${nodeLinkList.item(i).href})`)
                 i++;
                 while (i < nodeLinkList.length) {
-                    console.log(`ADDING ELEMENT ALT: ${nodeAltList.item(i).alt}`);
+                    //console.log(`ADDING ELEMENT ALT: ${nodeAltList.item(i).alt}`);
                     //dataToAdd.push([nodeLinkList.item(i).href, nodeAltList.item(i).alt]);
                     data.push([nodeLinkList.item(i).href, nodeAltList.item(i).alt]);
                     i++;
@@ -302,7 +114,7 @@ function appendData(passedData) {
                 //return dataToAdd;
             }
         }
-        console.log(`last item in list was not found, so nothing could be added :(`);
+        //console.log(`last item in list was not found, so nothing could be added :(`);
         //return dataToAdd;
         return data;
     }
@@ -335,11 +147,11 @@ async function getData(page) {
     /**this was used when we were checking if the last post id still existed
         //takes the href of the last post loaded and stores it in lastPostID
         let lastPostLink = links[links.length - 1];
-        console.log(lastPostLink);
+        //console.log(lastPostLink);
         let lastPostID = lastPostLink.replace(`https://www.instagram.com`, ``)
         //let scrolled = await page.evaluate(scrollDown, lastPostID, page);
     */
-    console.log('in scroll down');
+    //console.log('in scroll down');
     let scrollDelay = 1000;
     //console.log(lastPostID);
     //let elementExists = await page.evaluate(extractItem, `article a[href='${lastPostID}']`);
@@ -363,20 +175,20 @@ async function getData(page) {
         //console.log(lastPostLink);
         //let lastPostID = lastPostLink.replace(`https://www.instagram.com`, ``);
         const pastLength = data.length;
-        console.log(`data length: ${pastLength}`);
+        //console.log(`data length: ${pastLength}`);
         data = [...await page.evaluate(appendData, data)];
         if (data.length == pastLength) {
-            console.log(`no elements were added after this scroll`);
+            //console.log(`no elements were added after this scroll`);
         } else {
             //data = data.concat(newData);
-            console.log(`added new elements to links on this scroll`);
-            console.log(`new length of data is: ${data.length}`);
+            //console.log(`added new elements to links on this scroll`);
+            //console.log(`new length of data is: ${data.length}`);
         }
-        console.log(data);
+        //console.log(data);
 
         //elementExists = await page.evaluate(extractItem, `article a[href='${lastPostID}']`);
         //console.log(`after extract ` + elementExists);
-        console.log(counter);
+        //console.log(counter);
         counter++;
     }
 
@@ -437,17 +249,17 @@ async function GetProfileData(page) {
         data[i] = [links[i], imgs[i]];
     }
 
-    console.log(data.length);
-    console.log(data);
+    //console.log(data.length);
+    //console.log(data);
 
-    console.log('in scroll past');
+    //console.log('in scroll past');
     let scrollDelay = 1000;
     counter = 0;
 
-    console.log(`length of links is: ${links.length}`);
+    //console.log(`length of links is: ${links.length}`);
 
     let lastPostLink = links[11];
-    console.log(lastPostLink);
+    //console.log(lastPostLink);
     let lastPostID = lastPostLink.replace(`https://www.instagram.com`, ``)
     //let scrolled = await page.evaluate(scrollDown, lastPostID, page);
     await page.click(`article a[href="${lastPostID}"]`);
@@ -473,7 +285,7 @@ async function GetProfileData(page) {
             page.waitForSelector(`article>div>div>div>div>div>div>div>ul video`, { timeout: 10000, visible: true })
         ]);
 
-        console.log(`got past wait for`);
+        //console.log(`got past wait for`);
         //page.evaluate(() => console.log(`got past wait race`));
         //await page.evaluate(extractImgs, `body > div._2dDPU.CkGkG > div.zZYga`);
 
@@ -508,9 +320,9 @@ async function GetProfileData(page) {
         } else {
             console.log(`no new element added`);
         }
-        console.log(counter);
+        //console.log(counter);
         counter++;
-        console.log(data);
+        //console.log(data);
         //#react-root > section > main > div > div._2z6nI > article > div:nth-child(1) > div > div:nth-child(1) > div:nth-child(1) > a > div > div.KL4Bh > img
         //body > div._2dDPU.CkGkG > div.zZYga > div > article > div._97aPb > div > div > div.KL4Bh > img
     }
